@@ -9,6 +9,7 @@ on:
 
 env:
     COMPONENT_NAME: component4
+    FAIL_STAGE: deploy
 
 jobs:
     build:
@@ -20,11 +21,12 @@ jobs:
 
         steps:
             - name: Checkout Repository
+              uses: actions/checkout@v4
+
+            - name: Build
               run: |
-                echo "Building $COMPONENT_NAME..."
-                sleep 5
-                mkdir -p build
-                echo "Dummy artifact for $COMPONENT_NAME" > build/artifact.txt
+                chmod +x scripts/build.sh
+                ./scripts/build.sh
 
             - name: Set Artifact Name
               id: artifact
@@ -39,10 +41,13 @@ jobs:
 
 
         steps:
+            - name: Checkout Repository
+              uses: actions/checkout@v4
+
             - name: Execute Unit Tests
               run: |
-                echo "Running unit tests..."
-                sleep 3
+               chmod +x scripts/unit_test.sh
+               ./scripts/unit_test.sh
 
     integration_test:
         name: Integration Test
@@ -50,10 +55,16 @@ jobs:
         needs: unit_test
         
         steps:
+            - name: Checkout Repository
+              uses: actions/checkout@v4
+
             - name: Execute Integration Test
+              env:
+                FAIL_STAGE: ${{ env.FAIL_STAGE }}
+
               run: |
-                echo "Running integration tests..."
-                sleep 3
+                chmod +x scripts/integration_test.sh
+                ./scripts/integration_test.sh
 
     security_scan:
         name: Security Scan
@@ -62,10 +73,15 @@ jobs:
 
 
         steps:
+            - name: Checkout Repository
+              uses: actions/checkout@v4
+
             - name: Execute Security Scan
+              env:
+                FAIL_STAGE: ${{ env.FAIL_STAGE }}
               run: |
-                echo "Running Security Scan"
-                sleep 3
+                chmod +x scripts/security_scan.sh
+                ./scripts/security_scan.sh
 
     package:
         name: Package
@@ -73,10 +89,16 @@ jobs:
         needs: security_scan
 
         steps:
+            - name: Checkout Repository
+              uses: actions/checkout@v4
+
             - name: Package Release
+              env:
+                FAIL_STAGE: ${{ env.FAIL_STAGE }}
               run: |
-                echo "Packaging release..."
-                sleep 3
+                chmod +x scripts/package.sh
+                ./scripts/package.sh
+
 
     deploy:
         name: Deploy
@@ -84,8 +106,13 @@ jobs:
         needs: package
 
         steps:
+            - name: Checkout Repository
+              uses: actions/checkout@v4
+              
             - name: Simulate Deployment
+              env:
+                FAIL_STAGE: ${{ env.FAIL_STAGE }}
               run: |
-                echo "Deploying $COMPONENT_NAME..."
-                sleep 3
+                chmod +x scripts/deploy.sh
+                ./scripts/deploy.sh
 
