@@ -1,118 +1,145 @@
 name: Release Pipeline
 
-on: 
-    workflow_dispatch:
-
-        release:
-            types:
-                - published
+on:
+  workflow_dispatch:
 
 env:
-    COMPONENT_NAME: component4
-    FAIL_STAGE: deploy
+  COMPONENT_NAME: component4
+  FAIL_STAGE: deploy
 
 jobs:
-    build:
-        name: Build
-        runs-on: ubuntu-latest
+  build:
+    name: Build
+    runs-on: ubuntu-latest
 
-        outputs:
-            artifact-name: ${{ steps.artifact.outputs.name }}
+    outputs:
+      artifact-name: ${{ steps.artifact.outputs.name }}
 
-        steps:
-            - name: Checkout Repository
-              uses: actions/checkout@v4
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-            - name: Build
-              run: |
-                chmod +x scripts/build.sh
-                ./scripts/build.sh
+      - name: Build
+        run: |
+          chmod +x scripts/build.sh
+          ./scripts/build.sh
 
-            - name: Set Artifact Name
-              id: artifact
-              run: |
-                echo "name=${COMPONENT_NAME}-artifact" >> "$GITHUB_OUTPUT"
+      - name: Set Artifact Name
+        id: artifact
+        run: |
+          echo "name=${COMPONENT_NAME}-artifact" >> "$GITHUB_OUTPUT"
 
-        
-    unit_test:
-        name: Unit Test
-        runs-on: ubuntu-latest
-        needs: build
+  unit_test:
+    name: Unit Test
+    runs-on: ubuntu-latest
+    needs: build
 
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-        steps:
-            - name: Checkout Repository
-              uses: actions/checkout@v4
+      - name: Execute Unit Tests
+        run: |
+          chmod +x scripts/unit_test.sh
+          ./scripts/unit_test.sh
 
-            - name: Execute Unit Tests
-              run: |
-               chmod +x scripts/unit_test.sh
-               ./scripts/unit_test.sh
+  integration_test:
+    name: Integration Test
+    runs-on: ubuntu-latest
+    needs: unit_test
 
-    integration_test:
-        name: Integration Test
-        runs-on : ubuntu-latest
-        needs: unit_test
-        
-        steps:
-            - name: Checkout Repository
-              uses: actions/checkout@v4
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-            - name: Execute Integration Test
-              env:
-                FAIL_STAGE: ${{ env.FAIL_STAGE }}
+      - name: Execute Integration Test
+        env:
+          FAIL_STAGE: ${{ env.FAIL_STAGE }}
+        run: |
+          chmod +x scripts/integration_test.sh
+          ./scripts/integration_test.sh
 
-              run: |
-                chmod +x scripts/integration_test.sh
-                ./scripts/integration_test.sh
+  security_scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: integration_test
 
-    security_scan:
-        name: Security Scan
-        runs-on: ubuntu-latest
-        needs: integration_test
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
+      - name: Execute Security Scan
+        env:
+          FAIL_STAGE: ${{ env.FAIL_STAGE }}
+        run: |
+          chmod +x scripts/security_scan.sh
+          ./scripts/security_scan.sh
 
-        steps:
-            - name: Checkout Repository
-              uses: actions/checkout@v4
+  package:
+    name: Package
+    runs-on: ubuntu-latest
+    needs: security_scan
 
-            - name: Execute Security Scan
-              env:
-                FAIL_STAGE: ${{ env.FAIL_STAGE }}
-              run: |
-                chmod +x scripts/security_scan.sh
-                ./scripts/security_scan.sh
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-    package:
-        name: Package
-        runs-on: ubuntu-latest
-        needs: security_scan
+      - name: Package Release
+        env:
+          FAIL_STAGE: ${{ env.FAIL_STAGE }}
+        run: |
+          chmod +x scripts/package.sh
+          ./scripts/package.sh
 
-        steps:
-            - name: Checkout Repository
-              uses: actions/checkout@v4
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    needs: package
 
-            - name: Package Release
-              env:
-                FAIL_STAGE: ${{ env.FAIL_STAGE }}
-              run: |
-                chmod +x scripts/package.sh
-                ./scripts/package.sh
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
+      - name: Simulate Deployment
+        env:
+          FAIL_STAGE: ${{ env.FAIL_STAGE }}
+        run: |
+          chmod +x scripts/deploy.sh
+          ./scripts/deploy.sh
 
-    deploy:
-        name: Deploy
-        runs-on: ubuntu-latest
-        needs: package
+  notify-framework:
+    name: Trigger Notification Framework
 
-        steps:
-            - name: Checkout Repository
-              uses: actions/checkout@v4
-              
-            - name: Simulate Deployment
-              env:
-                FAIL_STAGE: ${{ env.FAIL_STAGE }}
-              run: |
-                chmod +x scripts/deploy.sh
-                ./scripts/deploy.sh
+    if: failure()
 
+    needs:
+      - build
+      - unit_test
+      - integration_test
+      - security_scan
+      - package
+      - deploy
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Trigger Notification Framework
+
+        env:
+          GH_PAT: ${{ secrets.NOTIFICATION_FRAMEWORK_TOKEN }}
+
+        run: |
+          curl -L \
+            -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GH_PAT" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/AnujBhushanTiw2685/notification-framework/dispatches \
+            -d '{
+                  "event_type": "release-failure",
+                  "client_payload": {
+                    "owner": "${{ github.repository_owner }}",
+                    "repository": "${{ github.event.repository.name }}",
+                    "run_id": "${{ github.run_id }}"
+                  }
+                }'
