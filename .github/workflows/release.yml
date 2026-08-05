@@ -3,6 +3,10 @@ name: Release Pipeline
 on:
   workflow_dispatch:
 
+  repository_dispatch:
+    types:
+        - nightly-run
+
 env:
   COMPONENT_NAME: component4
   FAIL_STAGE: deploy
