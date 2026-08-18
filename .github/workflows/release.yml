@@ -8,10 +8,10 @@ on:
         required: false
         default: "manual"
 
-      nightly_id:
-        description: "Nightly execution ID"
-        required: false
-        default: ""
+      # nightly_id:
+      #   description: "Nightly execution ID"
+      #   required: false
+      #   default: ""
 
   repository_dispatch:
     types:
